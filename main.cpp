@@ -21,6 +21,7 @@ Buat program untuk mensimulasikan studi kasus tersebut
 //
 // Hak Cipta (C) 2021, Michael Raditya Krisnadhi
 
+#include <fstream>
 #include <iostream>
 #include <list>
 #include <map>
@@ -46,10 +47,26 @@ enum HariID {
 
 char g_hariStr[][10] = {"SENIN", "SELASA", "RABU", "KAMIS", "JUMAT"};
 
+// ISerializable interface
+class ISerializable {
+public:
+    virtual std::string getClassID(void) const = 0;
+    virtual void serialize(std::ostream &output) const = 0;
+    virtual void deserialize(std::istream &input) = 0;
+};
+
 
 //==============================================================================
 // Deklarasi dan Definisi Class
 //==============================================================================
+
+#define ClassID_Mahasiswa   "SiakadCLI.Mahasiswa"
+#define ClassID_KRS         "SiakadCLI.KRS"
+#define ClassID_Matakuliah  "SiakadCLI.Matakuliah"
+#define ClassID_MKWajib     "SiakadCLI.MKWajib"
+#define ClassID_MKPilihan   "SiakadCLI.MKPilihan"
+#define ClassID_Jadwal      "SiakadCLI.Jadwal"
+#define ClassID_Dosen       "SiakadCLI.Dosen"
 
 // Deklarasi class
 class Mahasiswa;
@@ -63,18 +80,20 @@ class Dosen;
 // Entity: Mahasiswa (strong)
 // Relasi:
 //  1-N dengan KRS
-class Mahasiswa {
+class Mahasiswa : public ISerializable {
 private:
+    std::string m_id; // ID mahasiswa
     std::string m_nama; // nama mahasiswa
 
     std::map<int, KRS *> m_dataKRS; // mapping Semester -> KRS
 
 public:
     Mahasiswa(void);
-    Mahasiswa(const std::string &nama);
+    Mahasiswa(const std::string &id, const std::string &nama);
     ~Mahasiswa(void);
 
     // getters
+    const std::string &getID(void) const;
     const std::string &getNama(void) const;
 
     void addKRS(int semester, KRS *krs); // tambah KRS pada semester tertentu
@@ -84,13 +103,18 @@ public:
     std::map<int, KRS *>::const_iterator beginKRS(void) const; // iterate KRS (begin const)
     std::map<int, KRS *>::const_iterator endKRS(void) const; // iterate KRS (end const)
     void deleteKRS(int semester); // hapus KRS pada semester tertentu
+
+    // ISerializable
+    virtual std::string getClassID(void) const;
+    virtual void serialize(std::ostream &output) const;
+    virtual void deserialize(std::istream &input);
 };
 
 // Entity: KRS (weak oleh mahasiswa)
 // Relasi:
 //  N-1 dengan Mahasiswa
 //  N-N dengan Matakuliah
-class KRS {
+class KRS : public ISerializable {
 private:
     const Mahasiswa *m_pemilik; // pemilik KRS
     std::list<const Matakuliah *> m_daftarMakul; // daftar matakuliah dalam linked list
@@ -110,6 +134,11 @@ public:
 
     int getTotalMakul(void) const; // total matakuliah
     int getTotalSKS(void) const; // total bobot SKS
+
+    // ISerializable
+    virtual std::string getClassID(void) const;
+    virtual void serialize(std::ostream &output) const;
+    virtual void deserialize(std::istream &input);
 };
 
 // Entity: Matakuliah (strong)
@@ -118,8 +147,9 @@ public:
 //  N-N dengan Matakuliah
 //  N-N dengan Jadwal
 //  N-1 dengan Dosen
-class Matakuliah {
-private:
+class Matakuliah : public ISerializable {
+protected:
+    std::string m_id; // ID matakuliah
     std::string m_nama; // nama matakuliah
     int m_bobot; // bobot dalam SKS
     int m_kapasitas; // kapasitas matakuliah
@@ -131,10 +161,11 @@ private:
 
 public:
     Matakuliah(void);
-    Matakuliah(const std::string &nama, int bobot, int kapasitas);
+    Matakuliah(const std::string &id, const std::string &nama, int bobot, int kapasitas);
     ~Matakuliah(void);
 
     // getters
+    const std::string &getID(void) const;
     const std::string &getNama(void) const;
     int getBobot(void) const;
     int getKapasitas(void) const;
@@ -161,6 +192,9 @@ public:
 
     bool cekPrasyarat(const Mahasiswa *mhs, int semester) const; // cek prasyarat apakah terpenuhi
     bool cekTumbukan(const Matakuliah *lain) const; // cek tumbukan dengan matakuliah lain
+
+    // ISerializable
+    virtual std::string getClassID(void) const;
 };
 
 // Entity: MKWajib (inherit Matakuliah)
@@ -170,12 +204,17 @@ private:
 
 public:
     MKWajib(void);
-    MKWajib(const std::string &nama, int bobot, int kapasitas, JenisMKWajib jenis);
+    MKWajib(const std::string &id, const std::string &nama, int bobot, int kapasitas, JenisMKWajib jenis);
 
     // getters
     JenisMKWajib getJenis(void) const;
 
     bool isPilihan(void) const;
+
+    // ISerializable
+    virtual std::string getClassID(void) const;
+    virtual void serialize(std::ostream &output) const;
+    virtual void deserialize(std::istream &input);
 };
 
 // Entity: MKPilihan (inherit Matakuliah)
@@ -185,47 +224,94 @@ private:
 
 public:
     MKPilihan(void);
-    MKPilihan(const std::string &nama, int bobot, int kapasitas, const std::string &labRiset);
+    MKPilihan(const std::string &id, const std::string &nama, int bobot, int kapasitas, const std::string &labRiset);
 
     // getters
     const std::string &getLabRiset(void) const;
 
     bool isPilihan(void) const;
+
+    // ISerializable
+    virtual std::string getClassID(void) const;
+    virtual void serialize(std::ostream &output) const;
+    virtual void deserialize(std::istream &input);
 };
 
 // Entity: Jadwal (weak oleh Matakuliah)
 // Relasi:
 //  N-N dengan Matakuliah
-class Jadwal {
+class Jadwal : public ISerializable {
 private:
+    const Matakuliah *m_makul;
     HariID m_hari;
     int m_sesi;
 
 public:
     Jadwal(void);
-    Jadwal(HariID hari, int sesi);
+    Jadwal(const Matakuliah *makul, HariID hari, int sesi);
 
     // getters
+    const Matakuliah *getMakul(void) const;
     HariID getHari(void) const;
     int getSesi(void) const;
 
     bool cekTumbukan(const Jadwal *lain) const; // cek bentrokan/tumbukan dengan jadwal lain
+
+    // ISerializable
+    virtual std::string getClassID(void) const;
+    virtual void serialize(std::ostream &output) const;
+    virtual void deserialize(std::istream &input);
 };
 
 // Entity: Dosen (strong)
 // Relasi:
 //  1-N dengan Matakuliah
-class Dosen {
+class Dosen : public ISerializable {
 private:
+    std::string m_id; // ID dosen
     std::string m_nama; // nama dosen
 
 public:
     Dosen(void);
-    Dosen(const std::string &nama);
+    Dosen(const std::string &id, const std::string &nama);
 
     // getters
+    const std::string &getID(void) const;
     const std::string &getNama(void) const;
+
+    // ISerializable
+    virtual std::string getClassID(void) const;
+    virtual void serialize(std::ostream &output) const;
+    virtual void deserialize(std::istream &input);
 };
+
+
+//==============================================================================
+// Helpers
+//==============================================================================
+
+inline void strSerialize(std::ostream &output, const std::string &str) {
+    unsigned int size = str.size();
+    output.write((const char *)&size, sizeof(unsigned int));
+    if (size != 0) {
+        output.write((const char *)str.data(), size * sizeof(char));
+    }
+}
+
+inline void strDeserialize(std::istream &input, std::string &str) {
+    unsigned int size;
+    input.read((char *)&size, sizeof(unsigned int));
+
+    char *buffer = new char[size + 1];
+    if (size != 0) {
+        input.read((char *)buffer, size * sizeof(char));
+    }
+    buffer[size] = '\0';
+
+    str.assign(buffer);
+
+    delete buffer;
+}
 
 
 //==============================================================================
@@ -237,29 +323,29 @@ std::map<std::string, Matakuliah *> g_matakuliahDB;
 std::map<std::string, Dosen *> g_dosenDB;
 
 void generateMahasiswaDB(void) {
-    g_mahasiswaDB["M0520001"] = new Mahasiswa("Adrian Smith");
-    g_mahasiswaDB["M0520002"] = new Mahasiswa("Bruce Dickinson");
-    g_mahasiswaDB["M0520003"] = new Mahasiswa("Dave Murray");
-    g_mahasiswaDB["M0520004"] = new Mahasiswa("Janick Gers");
-    g_mahasiswaDB["M0520005"] = new Mahasiswa("Nicko McBrain");
-    g_mahasiswaDB["M0520006"] = new Mahasiswa("Steve Harris");
+    g_mahasiswaDB["M0520001"] = new Mahasiswa("M0520001", "Adrian Smith");
+    g_mahasiswaDB["M0520002"] = new Mahasiswa("M0520002", "Bruce Dickinson");
+    g_mahasiswaDB["M0520003"] = new Mahasiswa("M0520003", "Dave Murray");
+    g_mahasiswaDB["M0520004"] = new Mahasiswa("M0520004", "Janick Gers");
+    g_mahasiswaDB["M0520005"] = new Mahasiswa("M0520005", "Nicko McBrain");
+    g_mahasiswaDB["M0520006"] = new Mahasiswa("M0520006", "Steve Harris");
 }
 
 void generateMatakuliahDB(void) {
-    g_matakuliahDB["IF3110"] = new MKWajib("Pengembangan Berbasis Web", 2, 5, MKWajibProdi);
-    g_matakuliahDB["IF3111"] = new MKWajib("Pengembangan Berbasis Platform", 2, 5, MKWajibProdi);
-    g_matakuliahDB["IF3130"] = new MKWajib("Jaringan Komputer", 3, 5, MKWajibProdi);
-    g_matakuliahDB["IF3140"] = new MKWajib("Manajemen Basis Data", 2, 5, MKWajibProdi);
-    g_matakuliahDB["IF3151"] = new MKWajib("Interaksi Manusia dan Komputer", 3, 5, MKWajibProdi);
-    g_matakuliahDB["IF3170"] = new MKWajib("Kecerdasan Buatan", 4, 5, MKWajibProdi);
-    g_matakuliahDB["IF3150"] = new MKWajib("Manajemen Proyek", 2, 5, MKWajibProdi);
+    g_matakuliahDB["IF3110"] = new MKWajib("IF3110", "Pengembangan Berbasis Web", 2, 5, MKWajibProdi);
+    g_matakuliahDB["IF3111"] = new MKWajib("IF3111", "Pengembangan Berbasis Platform", 2, 5, MKWajibProdi);
+    g_matakuliahDB["IF3130"] = new MKWajib("IF3130", "Jaringan Komputer", 3, 5, MKWajibProdi);
+    g_matakuliahDB["IF3140"] = new MKWajib("IF3140", "Manajemen Basis Data", 2, 5, MKWajibProdi);
+    g_matakuliahDB["IF3151"] = new MKWajib("IF3151", "Interaksi Manusia dan Komputer", 3, 5, MKWajibProdi);
+    g_matakuliahDB["IF3170"] = new MKWajib("IF3170", "Kecerdasan Buatan", 4, 5, MKWajibProdi);
+    g_matakuliahDB["IF3150"] = new MKWajib("IF3150", "Manajemen Proyek", 2, 5, MKWajibProdi);
 
-    g_matakuliahDB["IF3230"] = new MKWajib("Sistem Paralel dan Terdistribusi", 3, 5, MKWajibProdi);
-    g_matakuliahDB["IF3240"] = new MKWajib("Sistem Informasi", 3, 5, MKWajibProdi);
-    g_matakuliahDB["IF3250"] = new MKWajib("Proyek Perangkat Lunak", 4, 5, MKWajibProdi);
-    g_matakuliahDB["IF3260"] = new MKWajib("Grafika Komputer", 3, 5, MKWajibProdi);
-    g_matakuliahDB["IF3280"] = new MKWajib("Sosio-informatika dan Profesionalisme", 3, 5, MKWajibProdi);
-    g_matakuliahDB["KU206X"] = new MKWajib("Agama dan Budipekerti", 2, 5, MKWajibUniversitas);
+    g_matakuliahDB["IF3230"] = new MKWajib("IF3230", "Sistem Paralel dan Terdistribusi", 3, 5, MKWajibProdi);
+    g_matakuliahDB["IF3240"] = new MKWajib("IF3240", "Sistem Informasi", 3, 5, MKWajibProdi);
+    g_matakuliahDB["IF3250"] = new MKWajib("IF3250", "Proyek Perangkat Lunak", 4, 5, MKWajibProdi);
+    g_matakuliahDB["IF3260"] = new MKWajib("IF3260", "Grafika Komputer", 3, 5, MKWajibProdi);
+    g_matakuliahDB["IF3280"] = new MKWajib("IF3280", "Sosio-informatika dan Profesionalisme", 3, 5, MKWajibProdi);
+    g_matakuliahDB["KU206X"] = new MKWajib("KU206X", "Agama dan Budipekerti", 2, 5, MKWajibUniversitas);
 
     g_matakuliahDB["IF3230"]->addPrasyarat(g_matakuliahDB["IF3130"]);
     g_matakuliahDB["IF3240"]->addPrasyarat(g_matakuliahDB["IF3110"]);
@@ -268,15 +354,15 @@ void generateMatakuliahDB(void) {
 }
 
 void generateDosenDB(void) {
-    g_dosenDB["WIN001"] = new Dosen("Winarno");
-    g_dosenDB["ARD001"] = new Dosen("Ardhi Wijayanto");
-    g_dosenDB["ABD001"] = new Dosen("Abdul Aziz");
-    g_dosenDB["DEW001"] = new Dosen("Dewi Wisnu Wardani");
-    g_dosenDB["SAR001"] = new Dosen("Sari Widya Sihwi");
-    g_dosenDB["WIH001"] = new Dosen("Wiharto");
-    g_dosenDB["WIS001"] = new Dosen("Wisnu Widiarto");
-    g_dosenDB["HAR001"] = new Dosen("Haryono Setiadi");
-    g_dosenDB["HER001"] = new Dosen("Heri Prasetyo");
+    g_dosenDB["WIN001"] = new Dosen("WIN001", "Winarno");
+    g_dosenDB["ARD001"] = new Dosen("ARD001", "Ardhi Wijayanto");
+    g_dosenDB["ABD001"] = new Dosen("ABD001", "Abdul Aziz");
+    g_dosenDB["DEW001"] = new Dosen("DEW001", "Dewi Wisnu Wardani");
+    g_dosenDB["SAR001"] = new Dosen("SAR001", "Sari Widya Sihwi");
+    g_dosenDB["WIH001"] = new Dosen("WIH001", "Wiharto");
+    g_dosenDB["WIS001"] = new Dosen("WIS001", "Wisnu Widiarto");
+    g_dosenDB["HAR001"] = new Dosen("HAR001", "Haryono Setiadi");
+    g_dosenDB["HER001"] = new Dosen("HER001", "Heri Prasetyo");
 }
 
 void generateDosenPengampuDB(void) {
@@ -297,43 +383,43 @@ void generateDosenPengampuDB(void) {
 }
 
 void generateJadwalMatakuliahDB(void) {
-    g_matakuliahDB["IF3110"]->addJadwal(new Jadwal(HariSenin, 1));
-    g_matakuliahDB["IF3110"]->addJadwal(new Jadwal(HariSenin, 2));
-    g_matakuliahDB["IF3111"]->addJadwal(new Jadwal(HariSelasa, 3));
-    g_matakuliahDB["IF3111"]->addJadwal(new Jadwal(HariSelasa, 4));
-    g_matakuliahDB["IF3130"]->addJadwal(new Jadwal(HariSenin, 4));
-    g_matakuliahDB["IF3130"]->addJadwal(new Jadwal(HariSenin, 5));
-    g_matakuliahDB["IF3130"]->addJadwal(new Jadwal(HariSenin, 6));
-    g_matakuliahDB["IF3140"]->addJadwal(new Jadwal(HariRabu, 2));
-    g_matakuliahDB["IF3140"]->addJadwal(new Jadwal(HariRabu, 3));
-    g_matakuliahDB["IF3151"]->addJadwal(new Jadwal(HariRabu, 4));
-    g_matakuliahDB["IF3151"]->addJadwal(new Jadwal(HariRabu, 5));
-    g_matakuliahDB["IF3151"]->addJadwal(new Jadwal(HariKamis, 1));
-    g_matakuliahDB["IF3170"]->addJadwal(new Jadwal(HariKamis, 4));
-    g_matakuliahDB["IF3170"]->addJadwal(new Jadwal(HariKamis, 5));
-    g_matakuliahDB["IF3170"]->addJadwal(new Jadwal(HariKamis, 6));
-    g_matakuliahDB["IF3170"]->addJadwal(new Jadwal(HariJumat, 2));
-    g_matakuliahDB["IF3150"]->addJadwal(new Jadwal(HariJumat, 3));
-    g_matakuliahDB["IF3150"]->addJadwal(new Jadwal(HariJumat, 4));
+    g_matakuliahDB["IF3110"]->addJadwal(new Jadwal(g_matakuliahDB["IF3110"], HariSenin, 1));
+    g_matakuliahDB["IF3110"]->addJadwal(new Jadwal(g_matakuliahDB["IF3110"], HariSenin, 2));
+    g_matakuliahDB["IF3111"]->addJadwal(new Jadwal(g_matakuliahDB["IF3111"], HariSelasa, 3));
+    g_matakuliahDB["IF3111"]->addJadwal(new Jadwal(g_matakuliahDB["IF3111"], HariSelasa, 4));
+    g_matakuliahDB["IF3130"]->addJadwal(new Jadwal(g_matakuliahDB["IF3130"], HariSenin, 4));
+    g_matakuliahDB["IF3130"]->addJadwal(new Jadwal(g_matakuliahDB["IF3130"], HariSenin, 5));
+    g_matakuliahDB["IF3130"]->addJadwal(new Jadwal(g_matakuliahDB["IF3130"], HariSenin, 6));
+    g_matakuliahDB["IF3140"]->addJadwal(new Jadwal(g_matakuliahDB["IF3140"], HariRabu, 2));
+    g_matakuliahDB["IF3140"]->addJadwal(new Jadwal(g_matakuliahDB["IF3140"], HariRabu, 3));
+    g_matakuliahDB["IF3151"]->addJadwal(new Jadwal(g_matakuliahDB["IF3151"], HariRabu, 4));
+    g_matakuliahDB["IF3151"]->addJadwal(new Jadwal(g_matakuliahDB["IF3151"], HariRabu, 5));
+    g_matakuliahDB["IF3151"]->addJadwal(new Jadwal(g_matakuliahDB["IF3151"], HariKamis, 1));
+    g_matakuliahDB["IF3170"]->addJadwal(new Jadwal(g_matakuliahDB["IF3170"], HariKamis, 4));
+    g_matakuliahDB["IF3170"]->addJadwal(new Jadwal(g_matakuliahDB["IF3170"], HariKamis, 5));
+    g_matakuliahDB["IF3170"]->addJadwal(new Jadwal(g_matakuliahDB["IF3170"], HariKamis, 6));
+    g_matakuliahDB["IF3170"]->addJadwal(new Jadwal(g_matakuliahDB["IF3170"], HariJumat, 2));
+    g_matakuliahDB["IF3150"]->addJadwal(new Jadwal(g_matakuliahDB["IF3150"], HariJumat, 3));
+    g_matakuliahDB["IF3150"]->addJadwal(new Jadwal(g_matakuliahDB["IF3150"], HariJumat, 4));
 
-    g_matakuliahDB["IF3230"]->addJadwal(new Jadwal(HariSenin, 1));
-    g_matakuliahDB["IF3230"]->addJadwal(new Jadwal(HariSenin, 2));
-    g_matakuliahDB["IF3230"]->addJadwal(new Jadwal(HariSenin, 3));
-    g_matakuliahDB["IF3240"]->addJadwal(new Jadwal(HariSenin, 4));
-    g_matakuliahDB["IF3240"]->addJadwal(new Jadwal(HariSenin, 5));
-    g_matakuliahDB["IF3240"]->addJadwal(new Jadwal(HariSenin, 6));
-    g_matakuliahDB["IF3250"]->addJadwal(new Jadwal(HariRabu, 3));
-    g_matakuliahDB["IF3250"]->addJadwal(new Jadwal(HariRabu, 4));
-    g_matakuliahDB["IF3250"]->addJadwal(new Jadwal(HariRabu, 5));
-    g_matakuliahDB["IF3250"]->addJadwal(new Jadwal(HariKamis, 2));
-    g_matakuliahDB["IF3260"]->addJadwal(new Jadwal(HariKamis, 3));
-    g_matakuliahDB["IF3260"]->addJadwal(new Jadwal(HariKamis, 4));
-    g_matakuliahDB["IF3260"]->addJadwal(new Jadwal(HariKamis, 5));
-    g_matakuliahDB["IF3280"]->addJadwal(new Jadwal(HariJumat, 1));
-    g_matakuliahDB["IF3280"]->addJadwal(new Jadwal(HariJumat, 2));
-    g_matakuliahDB["IF3280"]->addJadwal(new Jadwal(HariJumat, 3));
-    g_matakuliahDB["KU206X"]->addJadwal(new Jadwal(HariJumat, 5));
-    g_matakuliahDB["KU206X"]->addJadwal(new Jadwal(HariJumat, 6));
+    g_matakuliahDB["IF3230"]->addJadwal(new Jadwal(g_matakuliahDB["IF3230"], HariSenin, 1));
+    g_matakuliahDB["IF3230"]->addJadwal(new Jadwal(g_matakuliahDB["IF3230"], HariSenin, 2));
+    g_matakuliahDB["IF3230"]->addJadwal(new Jadwal(g_matakuliahDB["IF3230"], HariSenin, 3));
+    g_matakuliahDB["IF3240"]->addJadwal(new Jadwal(g_matakuliahDB["IF3240"], HariSenin, 4));
+    g_matakuliahDB["IF3240"]->addJadwal(new Jadwal(g_matakuliahDB["IF3240"], HariSenin, 5));
+    g_matakuliahDB["IF3240"]->addJadwal(new Jadwal(g_matakuliahDB["IF3240"], HariSenin, 6));
+    g_matakuliahDB["IF3250"]->addJadwal(new Jadwal(g_matakuliahDB["IF3250"], HariRabu, 3));
+    g_matakuliahDB["IF3250"]->addJadwal(new Jadwal(g_matakuliahDB["IF3250"], HariRabu, 4));
+    g_matakuliahDB["IF3250"]->addJadwal(new Jadwal(g_matakuliahDB["IF3250"], HariRabu, 5));
+    g_matakuliahDB["IF3250"]->addJadwal(new Jadwal(g_matakuliahDB["IF3250"], HariKamis, 2));
+    g_matakuliahDB["IF3260"]->addJadwal(new Jadwal(g_matakuliahDB["IF3260"], HariKamis, 3));
+    g_matakuliahDB["IF3260"]->addJadwal(new Jadwal(g_matakuliahDB["IF3260"], HariKamis, 4));
+    g_matakuliahDB["IF3260"]->addJadwal(new Jadwal(g_matakuliahDB["IF3260"], HariKamis, 5));
+    g_matakuliahDB["IF3280"]->addJadwal(new Jadwal(g_matakuliahDB["IF3280"], HariJumat, 1));
+    g_matakuliahDB["IF3280"]->addJadwal(new Jadwal(g_matakuliahDB["IF3280"], HariJumat, 2));
+    g_matakuliahDB["IF3280"]->addJadwal(new Jadwal(g_matakuliahDB["IF3280"], HariJumat, 3));
+    g_matakuliahDB["KU206X"]->addJadwal(new Jadwal(g_matakuliahDB["KU206X"], HariJumat, 5));
+    g_matakuliahDB["KU206X"]->addJadwal(new Jadwal(g_matakuliahDB["KU206X"], HariJumat, 6));
 }
 
 void generateDB(void) {
@@ -455,7 +541,23 @@ void cbMakulInfo(void) {
         Matakuliah *makul = g_matakuliahDB[kode];
 
         std::cout << " Nama MK : " << makul->getNama() << std::endl;
-        std::cout << " Jenis MK : " << (makul->isPilihan() ? "PILIHAN" : "WAJIB") << std::endl;
+
+        std::cout << " Jenis MK : ";
+        if (makul->getClassID() == ClassID_MKWajib) {
+            std::cout << "WAJIB";
+            switch (((MKWajib *)makul)->getJenis()) {
+            case MKWajibUniversitas:
+                std::cout << " UNIVERSITAS";
+                break;
+            case MKWajibProdi:
+                std::cout << " PRODI";
+                break;
+            }
+            std::cout << std::endl;
+        } else if (makul->getClassID() == ClassID_MKPilihan) {
+            std::cout << " PILIHAN (Lab Riset: " << ((MKPilihan *)makul)->getLabRiset() << ")";
+        }
+
         std::cout << " Bobot : " << makul->getBobot() << " SKS" << std::endl;
         std::cout << " Dosen Pengampu : " << (makul->getPengampu() != NULL ? makul->getPengampu()->getNama() : "(dosen luar prodi)") << std::endl;
         std::cout << " Peserta : " << makul->getPeserta() << " / " << makul->getKapasitas() << std::endl;
@@ -670,6 +772,155 @@ void cbKRSDelete(void) {
     }
 }
 
+void cbDBReset(void) {
+    g_user = NULL;
+    destroyDB();
+    std::cout << "SUKSES! Database ter-reset. Anda akan ter-logout secara otomatis" << std::endl;
+}
+
+void cbDBGenerate(void) {
+    g_user = NULL;
+    destroyDB();
+    generateDB();
+    std::cout << "SUKSES! Berhasil generate database" << std::endl;
+}
+
+void cbDBSave(void) {
+    std::string namaDB;
+    std::cout << " Nama DB (tanpa spasi) : ";
+    std::cin >> namaDB;
+
+    std::ofstream file(namaDB.c_str());
+    if (file.is_open()) {
+        unsigned int nMahasiswa = g_mahasiswaDB.size();
+        file.write((const char *)&nMahasiswa, sizeof(unsigned int));
+        for (
+            std::map<std::string, Mahasiswa *>::iterator it = g_mahasiswaDB.begin();
+            it != g_mahasiswaDB.end();
+            ++it
+        ) {
+            strSerialize(file, it->first);
+            it->second->serialize(file);
+        }
+
+        unsigned int nMatakuliah = g_matakuliahDB.size();
+        file.write((const char *)&nMatakuliah, sizeof(unsigned int));
+        for (
+            std::map<std::string, Matakuliah *>::iterator it = g_matakuliahDB.begin();
+            it != g_matakuliahDB.end();
+            ++it
+        ) {
+            strSerialize(file, it->first);
+            strSerialize(file, it->second->getClassID());
+            it->second->serialize(file);
+        }
+
+        unsigned int nDosen = g_dosenDB.size();
+        file.write((const char *)&nDosen, sizeof(unsigned int));
+        for (
+            std::map<std::string, Dosen *>::iterator it = g_dosenDB.begin();
+            it != g_dosenDB.end();
+            ++it
+        ) {
+            strSerialize(file, it->first);
+            it->second->serialize(file);
+        }
+
+        file.close();
+
+        std::cout << "SUKSES! Berhasil save ke DB" << std::endl;
+    } else {
+        std::cout << "Gagal save ke DB :(" << std::endl;
+    }
+}
+
+void cbDBLoad(void) {
+    std::string namaDB;
+    std::cout << " Nama DB (tanpa spasi) : ";
+    std::cin >> namaDB;
+
+    std::ifstream file(namaDB.c_str());
+    if (file.is_open()) {
+        destroyDB();
+
+        unsigned int nMahasiswa, nMatakuliah, nDosen;
+
+        file.read((char *)&nMahasiswa, sizeof(unsigned int));
+        for (unsigned int i = 0; i < nMahasiswa; i++) {
+            std::string id;
+            strDeserialize(file, id);
+            g_mahasiswaDB[id] = new Mahasiswa;
+
+            Mahasiswa *tmp = new Mahasiswa;
+            tmp->deserialize(file);
+            delete tmp;
+        }
+
+        file.read((char *)&nMatakuliah, sizeof(unsigned int));
+        for (unsigned int i = 0; i < nMatakuliah; i++) {
+            std::string id, classID;
+            strDeserialize(file, id);
+            strDeserialize(file, classID);
+
+            if (classID == ClassID_MKWajib) {
+                g_matakuliahDB[id] = new MKWajib;
+
+                MKWajib *tmp = new MKWajib;
+                tmp->deserialize(file);
+                delete tmp;
+            } else if (classID == ClassID_MKPilihan) {
+                g_matakuliahDB[id] = new MKPilihan;
+
+                MKPilihan *tmp = new MKPilihan;
+                tmp->deserialize(file);
+                delete tmp;
+            }
+        }
+
+        file.read((char *)&nDosen, sizeof(unsigned int));
+        for (unsigned int i = 0; i < nDosen; i++) {
+            std::string id;
+            strDeserialize(file, id);
+            g_dosenDB[id] = new Dosen;
+
+            Dosen *tmp = new Dosen;
+            tmp->deserialize(file);
+            delete tmp;
+        }
+
+        file.clear();
+        file.seekg(0);
+
+        file.read((char *)&nMahasiswa, sizeof(unsigned int));
+        for (unsigned int i = 0; i < nMahasiswa; i++) {
+            std::string id;
+            strDeserialize(file, id);
+            g_mahasiswaDB[id]->deserialize(file);
+        }
+
+        file.read((char *)&nMatakuliah, sizeof(unsigned int));
+        for (unsigned int i = 0; i < nMatakuliah; i++) {
+            std::string id, classID;
+            strDeserialize(file, id);
+            strDeserialize(file, classID);
+            g_matakuliahDB[id]->deserialize(file);
+        }
+
+        file.read((char *)&nDosen, sizeof(unsigned int));
+        for (unsigned int i = 0; i < nDosen; i++) {
+            std::string id;
+            strDeserialize(file, id);
+            g_dosenDB[id]->deserialize(file);
+        }
+
+        file.close();
+
+        std::cout << "SUKSES! Berhasil load DB" << std::endl;
+    } else {
+        std::cout << "Tidak dapat menemukan DB :(" << std::endl;
+    }
+}
+
 void cbLogout(void) {
     g_running = false;
 }
@@ -691,6 +942,10 @@ int main(void) {
     g_perintah["krs_hapusmk"] = new Operasi("hampus matakuliah dari KRS", cbKRSHapusmk);
     g_perintah["krs_cetak"] = new Operasi("cetak KRS", cbKRSCetak);
     g_perintah["krs_delete"] = new Operasi("hapus KRS yang ada", cbKRSDelete);
+    g_perintah["db_reset"] = new Operasi("reset database", cbDBReset);
+    g_perintah["db_generate"] = new Operasi("generate database bawaan", cbDBGenerate);
+    g_perintah["db_save"] = new Operasi("simpan ke database", cbDBSave);
+    g_perintah["db_load"] = new Operasi("muat dari database", cbDBLoad);
     g_perintah["logout"] = new Operasi("keluar dari program", cbLogout);
 
     std::cout << "Ketik `help` untuk melihat daftar perintah" << std::endl;
@@ -737,21 +992,24 @@ int main(void) {
 Mahasiswa::Mahasiswa(void) {
 }
 
-Mahasiswa::Mahasiswa(const std::string &nama) {
+Mahasiswa::Mahasiswa(const std::string &id, const std::string &nama) {
+    m_id = id;
     m_nama = nama;
 }
 
 Mahasiswa::~Mahasiswa(void) {
-    // hapus semua KRS karena KRS merupakan weak entity dari mahasiswa
-    // sehingga tanpa mahasiswa, tidak ada KRS tiap mahasiswa
     for (
         std::map<int, KRS *>::iterator it = m_dataKRS.begin();
         it != m_dataKRS.end();
         ++it
     ) {
-        delete it->second; // hapus instance KRS
+        delete it->second;
     }
     m_dataKRS.clear();
+}
+
+const std::string &Mahasiswa::getID(void) const {
+    return m_id;
 }
 
 const std::string &Mahasiswa::getNama(void) const {
@@ -794,6 +1052,59 @@ void Mahasiswa::deleteKRS(int semester) {
         KRS *krs = m_dataKRS[semester];
         delete krs;
         m_dataKRS.erase(semester);
+    }
+}
+
+std::string Mahasiswa::getClassID(void) const {
+    return ClassID_Mahasiswa;
+}
+
+void Mahasiswa::serialize(std::ostream &output) const {
+    std::string classID = getClassID();
+    strSerialize(output, classID);
+
+    strSerialize(output, m_id);
+    strSerialize(output, m_nama);
+
+    unsigned int nKRS = m_dataKRS.size();
+    output.write((const char *)&nKRS, sizeof(unsigned int));
+    for (
+        std::map<int, KRS *>::const_iterator it = m_dataKRS.begin();
+        it != m_dataKRS.end();
+        ++it
+    ) {
+        int semester = it->first;
+        output.write((const char *)&semester, sizeof(int));
+
+        it->second->serialize(output);
+    }
+}
+
+void Mahasiswa::deserialize(std::istream &input) {
+    std::string classID;
+    strDeserialize(input, classID);
+
+    strDeserialize(input, m_id);
+    strDeserialize(input, m_nama);
+
+    for (
+        std::map<int, KRS *>::iterator it = m_dataKRS.begin();
+        it != m_dataKRS.end();
+        ++it
+    ) {
+        delete it->second;
+    }
+    m_dataKRS.clear();
+
+    unsigned int nKRS;
+    input.read((char *)&nKRS, sizeof(unsigned int));
+    for (unsigned int i = 0; i < nKRS; i++) {
+        int semester;
+        input.read((char *)&semester, sizeof(int));
+
+        KRS *krs = new KRS(this);
+        krs->deserialize(input);
+        m_dataKRS[semester] = krs;
     }
 }
 
@@ -862,12 +1173,48 @@ int KRS::getTotalSKS(void) const {
     return total;
 }
 
+std::string KRS::getClassID(void) const {
+    return ClassID_KRS;
+}
+
+void KRS::serialize(std::ostream &output) const {
+    std::string classID = getClassID();
+    strSerialize(output, classID);
+
+    unsigned int nMakul = m_daftarMakul.size();
+    output.write((const char *)&nMakul, sizeof(unsigned int));
+    for (
+        std::list<const Matakuliah *>::const_iterator it = m_daftarMakul.begin();
+        it != m_daftarMakul.end();
+        ++it
+    ) {
+        strSerialize(output, (*it)->getID());
+    }
+}
+
+void KRS::deserialize(std::istream &input) {
+    std::string classID;
+    strDeserialize(input, classID);
+
+    unsigned int nMakul;
+    input.read((char *)&nMakul, sizeof(unsigned int));
+    for (unsigned int i = 0; i < nMakul; i++) {
+        std::string idMakul;
+        strDeserialize(input, idMakul);
+        if (g_matakuliahDB.count(idMakul) == 1) {
+            m_daftarMakul.push_back(g_matakuliahDB[idMakul]);
+        }
+    }
+}
+
+
 // Matakuliah
 
 Matakuliah::Matakuliah(void) {
 }
 
-Matakuliah::Matakuliah(const std::string &nama, int bobot, int kapasitas) {
+Matakuliah::Matakuliah(const std::string &id, const std::string &nama, int bobot, int kapasitas) {
+    m_id = id;
     m_nama = nama;
     m_bobot = bobot;
     m_kapasitas = kapasitas;
@@ -880,6 +1227,10 @@ Matakuliah::~Matakuliah(void) {
         delete jadwal;
         m_daftarJadwal.pop_front();
     }
+}
+
+const std::string &Matakuliah::getID(void) const {
+    return m_id;
 }
 
 const std::string &Matakuliah::getNama(void) const {
@@ -909,8 +1260,6 @@ void Matakuliah::kurangiMahasiswa(void) {
         m_peserta--;
     }
 }
-
-
 
 void Matakuliah::addPrasyarat(const Matakuliah *prasyarat) {
     m_prasyarat.push_back(prasyarat);
@@ -1008,13 +1357,18 @@ bool Matakuliah::cekTumbukan(const Matakuliah *lain) const {
     return tumbukan;
 }
 
+std::string Matakuliah::getClassID(void) const {
+    return ClassID_Matakuliah;
+}
+
+
 // MKWajib
 
 MKWajib::MKWajib(void) {
 }
 
-MKWajib::MKWajib(const std::string &nama, int bobot, int kapasitas, JenisMKWajib jenis)
-    : Matakuliah(nama, bobot, kapasitas)
+MKWajib::MKWajib(const std::string &id, const std::string &nama, int bobot, int kapasitas, JenisMKWajib jenis)
+    : Matakuliah(id, nama, bobot, kapasitas)
 {
     m_jenis = jenis;
 }
@@ -1027,13 +1381,102 @@ bool MKWajib::isPilihan(void) const {
     return false;
 }
 
+std::string MKWajib::getClassID(void) const {
+    return ClassID_MKWajib;
+}
+
+void MKWajib::serialize(std::ostream &output) const {
+    strSerialize(output, m_id);
+    strSerialize(output, m_nama);
+    output.write((const char *)&m_bobot, sizeof(int));
+    output.write((const char *)&m_kapasitas, sizeof(int));
+    output.write((const char *)&m_peserta, sizeof(int));
+
+    unsigned int nPrasyarat = m_prasyarat.size();
+    output.write((const char *)&nPrasyarat, sizeof(unsigned int));
+    for (
+        std::list<const Matakuliah *>::const_iterator it = m_prasyarat.begin();
+        it != m_prasyarat.end();
+        ++it
+    ) {
+        strSerialize(output, (*it)->getID());
+    }
+
+    unsigned int nJadwal = m_daftarJadwal.size();
+    output.write((const char *)&nJadwal, sizeof(unsigned int));
+    for (
+        std::list<Jadwal *>::const_iterator it = m_daftarJadwal.begin();
+        it != m_daftarJadwal.end();
+        ++it
+    ) {
+        (*it)->serialize(output);
+    }
+
+    std::string idDosen = "";
+    if (m_pengampu != NULL) {
+        idDosen = m_pengampu->getID();
+    }
+    strSerialize(output, idDosen);
+
+    output.write((const char *)&m_jenis, sizeof(JenisMKWajib));
+}
+
+void MKWajib::deserialize(std::istream &input) {
+    strDeserialize(input, m_id);
+    strDeserialize(input, m_nama);
+    input.read((char *)&m_bobot, sizeof(int));
+    input.read((char *)&m_kapasitas, sizeof(int));
+    input.read((char *)&m_peserta, sizeof(int));
+
+    m_prasyarat.clear();
+
+    unsigned int nPrasyarat;
+    input.read((char *)&nPrasyarat, sizeof(unsigned int));
+    for (unsigned int i = 0; i < nPrasyarat; i++) {
+        std::string idMakul;
+        strDeserialize(input, idMakul);
+        if (g_matakuliahDB.count(idMakul) == 1) {
+            m_prasyarat.push_back(g_matakuliahDB[idMakul]);
+        }
+    }
+
+    for (
+        std::list<Jadwal *>::iterator it = m_daftarJadwal.begin();
+        it != m_daftarJadwal.end();
+        ++it
+    ) {
+        delete (*it);
+    }
+    m_daftarJadwal.clear();
+
+    unsigned int nJadwal;
+    input.read((char *)&nJadwal, sizeof(unsigned int));
+    for (unsigned int i = 0; i < nJadwal; i++) {
+        Jadwal *jdw = new Jadwal(this, HariSenin, 0);
+        jdw->deserialize(input);
+        m_daftarJadwal.push_back(jdw);
+    }
+
+    std::string idDosen;
+    strDeserialize(input, idDosen);
+    if (!idDosen.empty()) {
+        if (g_dosenDB.count(idDosen) == 1) {
+            m_pengampu = g_dosenDB[idDosen];
+        }
+    } else {
+        m_pengampu = NULL;
+    }
+
+    input.read((char *)&m_jenis, sizeof(JenisMKWajib));
+}
+
 // MKPilihan
 
 MKPilihan::MKPilihan(void) {
 }
 
-MKPilihan::MKPilihan(const std::string &nama, int bobot, int kapasitas, const std::string &labRiset)
-    : Matakuliah(nama, bobot, kapasitas)
+MKPilihan::MKPilihan(const std::string &id, const std::string &nama, int bobot, int kapasitas, const std::string &labRiset)
+    : Matakuliah(id, nama, bobot, kapasitas)
 {
     m_labRiset = labRiset;
 }
@@ -1046,14 +1489,108 @@ bool MKPilihan::isPilihan(void) const {
     return true;
 }
 
+std::string MKPilihan::getClassID(void) const {
+    return ClassID_MKPilihan;
+}
+
+void MKPilihan::serialize(std::ostream &output) const {
+    strSerialize(output, m_id);
+    strSerialize(output, m_nama);
+    output.write((const char *)&m_bobot, sizeof(int));
+    output.write((const char *)&m_kapasitas, sizeof(int));
+    output.write((const char *)&m_peserta, sizeof(int));
+
+    unsigned int nPrasyarat = m_prasyarat.size();
+    output.write((const char *)&nPrasyarat, sizeof(unsigned int));
+    for (
+        std::list<const Matakuliah *>::const_iterator it = m_prasyarat.begin();
+        it != m_prasyarat.end();
+        ++it
+    ) {
+        strSerialize(output, (*it)->getID());
+    }
+
+    unsigned int nJadwal = m_daftarJadwal.size();
+    output.write((const char *)&nJadwal, sizeof(unsigned int));
+    for (
+        std::list<Jadwal *>::const_iterator it = m_daftarJadwal.begin();
+        it != m_daftarJadwal.end();
+        ++it
+    ) {
+        (*it)->serialize(output);
+    }
+
+    std::string idDosen = "";
+    if (m_pengampu != NULL) {
+        idDosen = m_pengampu->getID();
+    }
+    strSerialize(output, idDosen);
+
+    strSerialize(output, m_labRiset);
+}
+
+void MKPilihan::deserialize(std::istream &input) {
+    strDeserialize(input, m_id);
+    strDeserialize(input, m_nama);
+    input.read((char *)&m_bobot, sizeof(int));
+    input.read((char *)&m_kapasitas, sizeof(int));
+    input.read((char *)&m_peserta, sizeof(int));
+
+    m_prasyarat.clear();
+
+    unsigned int nPrasyarat;
+    input.read((char *)&nPrasyarat, sizeof(unsigned int));
+    for (unsigned int i = 0; i < nPrasyarat; i++) {
+        std::string idMakul;
+        strDeserialize(input, idMakul);
+        if (g_matakuliahDB.count(idMakul) == 1) {
+            m_prasyarat.push_back(g_matakuliahDB[idMakul]);
+        }
+    }
+
+    for (
+        std::list<Jadwal *>::iterator it = m_daftarJadwal.begin();
+        it != m_daftarJadwal.end();
+        ++it
+    ) {
+        delete (*it);
+    }
+    m_daftarJadwal.clear();
+
+    unsigned int nJadwal;
+    input.read((char *)&nJadwal, sizeof(unsigned int));
+    for (unsigned int i = 0; i < nJadwal; i++) {
+        Jadwal *jdw = new Jadwal(this, HariSenin, 0);
+        jdw->deserialize(input);
+        m_daftarJadwal.push_back(jdw);
+    }
+
+    std::string idDosen;
+    strDeserialize(input, idDosen);
+    if (!idDosen.empty()) {
+        if (g_dosenDB.count(idDosen) == 1) {
+            m_pengampu = g_dosenDB[idDosen];
+        }
+    } else {
+        m_pengampu = NULL;
+    }
+
+    strDeserialize(input, m_labRiset);
+}
+
 // Jadwal
 
 Jadwal::Jadwal(void) {
 }
 
-Jadwal::Jadwal(HariID hari, int sesi) {
+Jadwal::Jadwal(const Matakuliah *makul, HariID hari, int sesi) {
+    m_makul = makul;
     m_hari = hari;
     m_sesi = sesi;
+}
+
+const Matakuliah *Jadwal::getMakul(void) const {
+    return m_makul;
 }
 
 HariID Jadwal::getHari(void) const {
@@ -1068,16 +1605,62 @@ bool Jadwal::cekTumbukan(const Jadwal *lain) const {
     return (m_hari == lain->getHari()) && (m_sesi == lain->getSesi());
 }
 
+std::string Jadwal::getClassID(void) const {
+    return ClassID_Jadwal;
+}
+
+void Jadwal::serialize(std::ostream &output) const {
+    std::string classID = getClassID();
+    strSerialize(output, classID);
+
+    output.write((const char *)&m_hari, sizeof(HariID));
+    output.write((const char *)&m_sesi, sizeof(int));
+}
+
+void Jadwal::deserialize(std::istream &input) {
+    std::string classID;
+    strDeserialize(input, classID);
+
+    input.read((char *)&m_hari, sizeof(HariID));
+    input.read((char *)&m_sesi, sizeof(int));
+}
+
+
 // Dosen
 
 Dosen::Dosen(void) {
 }
 
-Dosen::Dosen(const std::string &nama) {
+Dosen::Dosen(const std::string &id, const std::string &nama) {
+    m_id = id;
     m_nama = nama;
+}
+
+const std::string &Dosen::getID(void) const {
+    return m_id;
 }
 
 const std::string &Dosen::getNama(void) const {
     return m_nama;
+}
+
+std::string Dosen::getClassID(void) const {
+    return ClassID_Dosen;
+}
+
+void Dosen::serialize(std::ostream &output) const {
+    std::string classID = getClassID();
+    strSerialize(output, classID);
+
+    strSerialize(output, m_id);
+    strSerialize(output, m_nama);
+}
+
+void Dosen::deserialize(std::istream &input) {
+    std::string classID;
+    strDeserialize(input, classID);
+
+    strDeserialize(input, m_id);
+    strDeserialize(input, m_nama);
 }
 
