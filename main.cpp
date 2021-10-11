@@ -23,6 +23,7 @@ Buat program untuk mensimulasikan studi kasus tersebut
 
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <list>
 #include <map>
 #include <string>
@@ -33,12 +34,12 @@ Buat program untuk mensimulasikan studi kasus tersebut
 //==============================================================================
 
 enum JenisMKWajib {
-    MKWajibUniversitas,
+    MKWajibUniversitas = 0,
     MKWajibProdi
 };
 
 enum HariID {
-    HariSenin,
+    HariSenin = 0,
     HariSelasa,
     HariRabu,
     HariKamis,
@@ -47,7 +48,15 @@ enum HariID {
 
 char g_hariStr[][10] = {"SENIN", "SELASA", "RABU", "KAMIS", "JUMAT"};
 
-// ISerializable interface
+// IStrongEntity interface : implements reference counting
+class IStrongEntity {
+public:
+    virtual void incRef(void) = 0;
+    virtual void decRef(void) = 0;
+    virtual unsigned int getRefs(void) const = 0;
+};
+
+// ISerializable interface : implements stream R/W on objects
 class ISerializable {
 public:
     virtual std::string getClassID(void) const = 0;
@@ -80,12 +89,17 @@ class Dosen;
 // Entity: Mahasiswa (strong)
 // Relasi:
 //  1-N dengan KRS
-class Mahasiswa : public ISerializable {
+class Mahasiswa
+    : public ISerializable
+    , public IStrongEntity
+{
 private:
     std::string m_id; // ID mahasiswa
     std::string m_nama; // nama mahasiswa
 
     std::map<int, KRS *> m_dataKRS; // mapping Semester -> KRS
+
+    unsigned int m_refs; // reference count
 
 public:
     Mahasiswa(void);
@@ -108,16 +122,22 @@ public:
     virtual std::string getClassID(void) const;
     virtual void serialize(std::ostream &output) const;
     virtual void deserialize(std::istream &input);
+
+    // IStrongEntity
+    void incRef(void);
+    void decRef(void);
+    unsigned int getRefs(void) const;
 };
 
 // Entity: KRS (weak oleh mahasiswa)
 // Relasi:
 //  N-1 dengan Mahasiswa
 //  N-N dengan Matakuliah
-class KRS : public ISerializable {
+class KRS : public ISerializable
+{
 private:
     const Mahasiswa *m_pemilik; // pemilik KRS
-    std::list<const Matakuliah *> m_daftarMakul; // daftar matakuliah dalam linked list
+    std::list<Matakuliah *> m_daftarMakul; // daftar matakuliah dalam linked list
 
 public:
     KRS(void);
@@ -125,11 +145,11 @@ public:
 
     const Mahasiswa *getPemilik(void) const; // dapatkan pemilik KRS
 
-    void addMakul(const Matakuliah *makul); // tambah matakuliah di akhir list
-    std::list<const Matakuliah *>::iterator beginMakul(void); // iterate daftar matakuliah (begin)
-    std::list<const Matakuliah *>::iterator endMakul(void); // iterate daftar matakuliah (end)
-    std::list<const Matakuliah *>::const_iterator beginMakul(void) const; // iterate daftar matakuliah (begin const)
-    std::list<const Matakuliah *>::const_iterator endMakul(void) const; // iterate daftar matakuliah (end const)
+    void addMakul(Matakuliah *makul); // tambah matakuliah di akhir list
+    std::list<Matakuliah *>::iterator beginMakul(void); // iterate daftar matakuliah (begin)
+    std::list<Matakuliah *>::iterator endMakul(void); // iterate daftar matakuliah (end)
+    std::list<Matakuliah *>::const_iterator beginMakul(void) const; // iterate daftar matakuliah (begin const)
+    std::list<Matakuliah *>::const_iterator endMakul(void) const; // iterate daftar matakuliah (end const)
     void deleteMakul(const std::string &kodeMK); // hapus matakuliah dari list berdasarkan kode matakuliah
 
     int getTotalMakul(void) const; // total matakuliah
@@ -147,7 +167,10 @@ public:
 //  N-N dengan Matakuliah
 //  N-N dengan Jadwal
 //  N-1 dengan Dosen
-class Matakuliah : public ISerializable {
+class Matakuliah
+    : public ISerializable
+    , public IStrongEntity
+{
 protected:
     std::string m_id; // ID matakuliah
     std::string m_nama; // nama matakuliah
@@ -155,9 +178,11 @@ protected:
     int m_kapasitas; // kapasitas matakuliah
     int m_peserta; // peserta matakuliah
 
-    std::list<const Matakuliah *> m_prasyarat; // prasyarat matakuliah
+    std::list<Matakuliah *> m_prasyarat; // prasyarat matakuliah
     std::list<Jadwal *> m_daftarJadwal; // daftar sesi matakuliah
-    const Dosen *m_pengampu; // dosen pengampu matakuliah
+    Dosen *m_pengampu; // dosen pengampu matakuliah
+
+    unsigned int m_refs; // reference count
 
 public:
     Matakuliah(void);
@@ -174,9 +199,12 @@ public:
     void tambahMahasiswa(void); // tambah mahasiswa ke matakuliah
     void kurangiMahasiswa(void); // kurangi mahasiswa dari matakuliah
 
-    void addPrasyarat(const Matakuliah *prasyarat); // tambah matakuliah prasyarat
-    std::list<const Matakuliah *>::const_iterator beginPrasyarat(void) const; // iterate matakuliah prasyarat (begin const)
-    std::list<const Matakuliah *>::const_iterator endPrasyarat(void) const; // iterate matakuliah prasyarat (end const)
+    void addPrasyarat(Matakuliah *prasyarat); // tambah matakuliah prasyarat
+    void deletePrasyarat(std::list<Matakuliah *>::iterator prasyaratIt); // hapus matakuliah prasyarat berdasarkan iterator
+    std::list<Matakuliah *>::iterator beginPrasyarat(void); // iterate matakuliah prasyarat (begin)
+    std::list<Matakuliah *>::iterator endPrasyarat(void); // iterate matakuliah prasyarat (end)
+    std::list<Matakuliah *>::const_iterator beginPrasyarat(void) const; // iterate matakuliah prasyarat (begin const)
+    std::list<Matakuliah *>::const_iterator endPrasyarat(void) const; // iterate matakuliah prasyarat (end const)
 
     void addJadwal(Jadwal *jadwal); // tambah jadwal
     void deleteJadwal(std::list<Jadwal *>::iterator jadwalIt); // hapus jadwal berdasarkan iterator
@@ -187,14 +215,19 @@ public:
 
     virtual bool isPilihan(void) const = 0;
 
-    void setPengampu(const Dosen *pengampu); // atur dosen pengampu
-    const Dosen *getPengampu(void) const; // dapatkan dosen pengampu
+    void setPengampu(Dosen *pengampu); // atur dosen pengampu
+    Dosen *getPengampu(void) const; // dapatkan dosen pengampu
 
     bool cekPrasyarat(const Mahasiswa *mhs, int semester) const; // cek prasyarat apakah terpenuhi
     bool cekTumbukan(const Matakuliah *lain) const; // cek tumbukan dengan matakuliah lain
 
     // ISerializable
     virtual std::string getClassID(void) const;
+
+    // IStrongEntity
+    void incRef(void);
+    void decRef(void);
+    unsigned int getRefs(void) const;
 };
 
 // Entity: MKWajib (inherit Matakuliah)
@@ -266,10 +299,15 @@ public:
 // Entity: Dosen (strong)
 // Relasi:
 //  1-N dengan Matakuliah
-class Dosen : public ISerializable {
+class Dosen
+    : public ISerializable
+    , public IStrongEntity
+{
 private:
     std::string m_id; // ID dosen
     std::string m_nama; // nama dosen
+
+    unsigned int m_refs; // reference count
 
 public:
     Dosen(void);
@@ -283,6 +321,11 @@ public:
     virtual std::string getClassID(void) const;
     virtual void serialize(std::ostream &output) const;
     virtual void deserialize(std::istream &input);
+
+    // IStrongEntity
+    void incRef(void);
+    void decRef(void);
+    unsigned int getRefs(void) const;
 };
 
 
@@ -489,26 +532,133 @@ void cbHelp(void) {
     }
 }
 
-void cbLogin(void) {
-    std::string nim;
-    std::cout << "Masukkan NIM anda: ";
-    std::cin >> nim;
-    if (g_mahasiswaDB.count(nim) == 1) {
-        g_user = g_mahasiswaDB[nim];
-        std::cout << "SUKSES! Berhasil login sebagai: " << g_user->getNama() << std::endl;
+// Mahasiswa
+
+void cbMhsAdd(void) {
+    std::cout << "TAMBAH MAHASISWA" << std::endl;
+
+    std::string id;
+    std::cout << " NIM : ";
+    std::cin >> id;
+
+    if (g_mahasiswaDB.count(id) == 0) {
+        std::string nama;
+
+        std::cout << " Nama lengkap : ";
+        std::cin >> std::ws;
+        std::getline(std::cin, nama);
+
+        Mahasiswa *mhs = new Mahasiswa(id, nama);
+        g_mahasiswaDB[id] = mhs;
+        std::cout << "SUKSES! Berhasil menambah mahasiswa" << std::endl;
     } else {
-        std::cout << "NIM anda tidak ditemukan :(" << std::endl;
+        std::cout << "Mahasiswa dengan NIM tersebut sudah ada :(" << std::endl;
     }
 }
 
-void cbDosenList(void) {
-    std::cout << "LIST DOSEN" << std::endl;
+void cbMhsList(void) {
+    std::cout << "LIST MAHASISWA" << std::endl;
+
     for (
-        std::map<std::string, Dosen *>::iterator it = g_dosenDB.begin();
-        it != g_dosenDB.end();
+        std::map<std::string, Mahasiswa *>::iterator it = g_mahasiswaDB.begin();
+        it != g_mahasiswaDB.end();
         ++it
     ) {
         std::cout << " " << it->first << " - " << it->second->getNama() << std::endl;
+    }
+}
+
+void cbMhsHapus(void) {
+    std::cout << "HAPUS MAHASISWA" << std::endl;
+
+    std::string id;
+    std::cout << " NIM : ";
+    std::cin >> id;
+
+    if (g_mahasiswaDB.count(id) == 1) {
+        Mahasiswa *mhs = g_mahasiswaDB[id];
+
+        if (mhs->getRefs() == 0) {
+            delete mhs;
+            g_mahasiswaDB.erase(id);
+            std::cout << "SUKSES! Berhasil menghapus mahasiswa" << std::endl;
+        } else {
+            std::cout << "Mahasiswa masih menjadi rujukan objek lain :(" << std::endl;
+        }
+    } else {
+        std::cout << "Mahasiswa tidak ditemukan :(" << std::endl;
+    }
+}
+
+// Matakuliah
+
+void cbMakulAdd(void) {
+    std::cout << "TAMBAH MATAKULIAH" << std::endl;
+
+    std::string id;
+    std::cout << " Kode MK : ";
+    std::cin >> id;
+
+    if (g_matakuliahDB.count(id) == 0) {
+        int jenis;
+        std::cout << " Jenis MK (wajib universitas: 0, wajib prodi: 1, pilihan: 2) : ";
+        std::cin >> jenis;
+
+        Matakuliah *makul = NULL;
+        if ((jenis == 0) || (jenis == 1)) {
+            std::string nama;
+            int bobot;
+            int kapasitas;
+
+            std::cout << " Nama MK : ";
+            std::cin >> std::ws;
+            std::getline(std::cin, nama);
+
+            std::cout << " Bobot (SKS) : ";
+            std::cin >> bobot;
+
+            std::cout << " Kapasitas : ";
+            std::cin >> kapasitas;
+
+            JenisMKWajib jenisMK = MKWajibUniversitas;
+            if (jenis == 1) {
+                jenisMK = MKWajibProdi;
+            }
+
+            makul = new MKWajib(id, nama, bobot, kapasitas, jenisMK);
+        } else if (jenis == 2) {
+            std::string nama;
+            int bobot;
+            int kapasitas;
+            std::string labRiset;
+
+            std::cout << " Nama MK : ";
+            std::cin >> std::ws;
+            std::getline(std::cin, nama);
+
+            std::cout << " Bobot (SKS) : ";
+            std::cin >> bobot;
+
+            std::cout << " Kapasitas : ";
+            std::cin >> kapasitas;
+
+            std::cout << " Lab riset : ";
+            std::cin >> std::ws;
+            std::getline(std::cin, labRiset);
+
+            makul = new MKPilihan(id, nama, bobot, kapasitas, labRiset);
+        } else {
+            std::cout << "Masukan tidak valid :(" << std::endl;
+        }
+
+        if (makul != NULL) {
+            g_matakuliahDB[id] = makul;
+            std::cout << "SUKSES! Berhasil menambah matakuliah. Harap untuk mengatur dosen pengampu dengan perintah `makul_setpengampu`" << std::endl;
+        } else {
+            std::cout << "Terdapat error dalam menambah matakuliah :(" << std::endl;
+        }
+    } else {
+        std::cout << "Matakuliah tersebut sudah ada sebelumnya :(" << std::endl;
     }
 }
 
@@ -565,11 +715,11 @@ void cbMakulInfo(void) {
         std::cout << " Prasyarat : ";
         if (makul->beginPrasyarat() != makul->endPrasyarat()) {
             for (
-                std::list<const Matakuliah *>::const_iterator it = makul->beginPrasyarat();
+                std::list<Matakuliah *>::const_iterator it = makul->beginPrasyarat();
                 it != makul->endPrasyarat();
                 ++it
             ) {
-                std::cout << (*it)->getNama();
+                std::cout << (*it)->getID() << " - " << (*it)->getNama();
                 ++it;
                 if (it == makul->endPrasyarat()) {
                     std::cout << std::endl;
@@ -595,6 +745,267 @@ void cbMakulInfo(void) {
         std::cout << "Matakuliah tidak ditemukan :(" << std::endl;
     }
 }
+
+void cbMakulRemove(void) {
+    std::cout << "INFO MATAKULIAH" << std::endl;
+
+    std::string kode;
+    std::cout << " Kode MK : ";
+    std::cin >> kode;
+
+    if (g_matakuliahDB.count(kode) == 1) {
+        Matakuliah *makul = g_matakuliahDB[kode];
+
+        if (makul->getRefs() == 0) {
+            delete makul;
+            g_matakuliahDB.erase(kode);
+            std::cout << "SUKSES! Matakuliah berhasil dihapus" << std::endl;
+        } else {
+            std::cout << "Matakuliah masih menjadi rujukan objek lain :(" << std::endl;
+        }
+    } else {
+        std::cout << "Matakuliah tidak ditemukan :(" << std::endl;
+    }
+}
+
+void cbMakulSetpengampu(void) {
+    std::cout << "ATUR DOSEN PENGAMPU MATAKULIAH" << std::endl;
+
+    std::string kode;
+    std::cout << " Kode MK : ";
+    std::cin >> kode;
+
+    if (g_matakuliahDB.count(kode) == 1) {
+        Matakuliah *makul = g_matakuliahDB[kode];
+
+        std::string idPengampu;
+        std::cout << " Kode pengampu (luar prodi: -) : ";
+        std::cin >> idPengampu;
+
+        if (idPengampu != "-") {
+            if (g_dosenDB.count(idPengampu) == 1) {
+                makul->setPengampu(g_dosenDB[idPengampu]);
+                std::cout << "SUKSES! Berhasil mengatur dosen pengampu matakuliah" << std::endl;
+            } else {
+                std::cout << "Dosen tidak ditemukan :(" << std::endl;
+            }
+        } else {
+            makul->setPengampu(NULL);
+            std::cout << "SUKSES! Dosen luar prodi diarahkan untuk mengampu MK tersebut" << std::endl;
+        }
+    } else {
+        std::cout << "Matakuliah tidak ditemukan :(" << std::endl;
+    }
+}
+
+void cbMakulTambahjdw(void) {
+    std::cout << "TAMBAH JADWAL KE MATAKULIAH" << std::endl;
+
+    std::string kode;
+    std::cout << " Kode MK : ";
+    std::cin >> kode;
+
+    if (g_matakuliahDB.count(kode) == 1) {
+        Matakuliah *makul = g_matakuliahDB[kode];
+
+        HariID hari;
+        int sesi;
+
+        std::cout << " Hari (senin (0) sampai jumat (4)) : ";
+        std::cin >> (int &)hari;
+
+        std::cout << " Sesi (1 sampai 9) : ";
+        std::cin >> sesi;
+
+        if ((1 <= sesi) && (sesi <= 9)) {
+            bool proceed = true;
+            for (
+                std::list<Jadwal *>::iterator it = makul->beginJadwal();
+                it != makul->endJadwal();
+                ++it
+            ) {
+                if (((*it)->getHari() == hari) && ((*it)->getSesi() == sesi)) {
+                    proceed = false;
+                    break;
+                }
+            }
+
+            if (proceed) {
+                makul->addJadwal(new Jadwal(makul, hari, sesi));
+                std::cout << "SUKSES! Berhasil menambah jadwal pada matakuliah" << std::endl;
+            } else {
+                std::cout << "Jadwal tersebut sudah ada :(" << std::endl;
+            }
+        } else {
+            std::cout << "Masukan tidak valid :(" << std::endl;
+        }
+    } else {
+        std::cout << "Matakuliah tidak ditemukan :(" << std::endl;
+    }
+}
+
+void cbMakulHapusjdw(void) {
+    std::cout << "HAPUS JADWAL DARI MATAKULIAH" << std::endl;
+
+    std::string kode;
+    std::cout << " Kode MK : ";
+    std::cin >> kode;
+
+    if (g_matakuliahDB.count(kode) == 1) {
+        Matakuliah *makul = g_matakuliahDB[kode];
+
+        int i = 1;
+        int hapus;
+        std::cout << " [0] Batal menghapus" << std::endl;
+        for (
+            std::list<Jadwal *>::iterator it = makul->beginJadwal();
+            it != makul->endJadwal();
+            ++it
+        ) {
+            std::cout << " [" << i << "] Hari " << g_hariStr[(*it)->getHari()] << " sesi " << (*it)->getSesi() << std::endl;
+            i++;
+        }
+
+        std::cout << " Hapus : ";
+        std::cin >> hapus;
+
+        if ((hapus != 0) && (hapus <= std::distance(makul->beginJadwal(), makul->endJadwal()))) {
+            std::list<Jadwal *>::iterator itHapus = makul->beginJadwal();
+            std::advance(itHapus, hapus - 1);
+            makul->deleteJadwal(itHapus);
+            std::cout << "SUKSES! Jadwal berhasil dihapus dari matakuliah" << std::endl;
+        }
+    } else {
+        std::cout << "Matakuliah tidak ditemukan :(" << std::endl;
+    }
+}
+
+void cbMakulTambahpra(void) {
+    std::cout << "TAMBAH PRASYARAT KE MATAKULIAH" << std::endl;
+
+    std::string kode;
+    std::cout << " Kode MK : ";
+    std::cin >> kode;
+
+    if (g_matakuliahDB.count(kode) == 1) {
+        Matakuliah *makul = g_matakuliahDB[kode];
+
+        std::string kdPrasyarat;
+        std::cout << " Kode MK Prasyarat : ";
+        std::cin >> kdPrasyarat;
+
+        if ((kdPrasyarat != kode) && (g_matakuliahDB.count(kode) == 1)) {
+            bool proceed = true;
+            for (
+                std::list<Matakuliah *>::iterator it = makul->beginPrasyarat();
+                it != makul->endPrasyarat();
+                ++it
+            ) {
+                if ((*it)->getID() == kdPrasyarat) {
+                    proceed = false;
+                    std::cout << "Matakuliah tersebut telah menjadi prasyarat sebelumnya :(" << std::endl;
+                    break;
+                }
+            }
+
+            if (proceed) {
+                makul->addPrasyarat(g_matakuliahDB[kdPrasyarat]);
+                std::cout << "SUKSES! Berhasil menambah MK prasyarat" << std::endl;
+            }
+        } else {
+            std::cout << "Kode MK prasyarat tidak valid :(" << std::endl;
+        }
+    } else {
+        std::cout << "Matakuliah tidak ditemukan :(" << std::endl;
+    }
+}
+
+void cbMakulHapuspra(void) {
+    std::cout << "HAPUS JADWAL DARI MATAKULIAH" << std::endl;
+
+    std::string kode;
+    std::cout << " Kode MK : ";
+    std::cin >> kode;
+
+    if (g_matakuliahDB.count(kode) == 1) {
+        Matakuliah *makul = g_matakuliahDB[kode];
+
+        std::string kdPrasyarat;
+        std::cout << " Kode MK Prasyarat : ";
+        std::cin >> kdPrasyarat;
+
+        std::cout << "Menghapus MK prasyarat ..." << std::endl;
+        for (
+            std::list<Matakuliah *>::iterator it = makul->beginPrasyarat();
+            it != makul->endPrasyarat();
+            ++it
+        ) {
+            if ((*it)->getID() == kdPrasyarat) {
+                makul->deletePrasyarat(it);
+                break;
+            }
+        }
+    } else {
+        std::cout << "Matakuliah tidak ditemukan :(" << std::endl;
+    }
+}
+
+// Dosen
+
+void cbDosenAdd(void) {
+    std::cout << "TAMBAH DOSEN" << std::endl;
+
+    std::string id;
+    std::cout << " Kode : ";
+    std::cin >> id;
+
+    if (g_dosenDB.count(id) == 0) {
+        std::string nama;
+        std::cout << " Nama : ";
+        std::cin >> std::ws;
+        std::getline(std::cin, nama);
+
+        Dosen *dsn = new Dosen(id, nama);
+        g_dosenDB[id] = dsn;
+        std::cout << "SUKSES! Berhasil menambah dosen" << std::endl;
+    } else {
+        std::cout << "Dosen sudah ada sebelumnya :(" << std::endl;
+    }
+}
+
+void cbDosenList(void) {
+    std::cout << "LIST DOSEN" << std::endl;
+    for (
+        std::map<std::string, Dosen *>::iterator it = g_dosenDB.begin();
+        it != g_dosenDB.end();
+        ++it
+    ) {
+        std::cout << " " << it->first << " - " << it->second->getNama() << std::endl;
+    }
+}
+
+void cbDosenRemove(void) {
+    std::cout << "HAPUS DOSEN" << std::endl;
+
+    std::string id;
+    std::cout << " Kode : ";
+    std::cin >> id;
+
+    if (g_dosenDB.count(id) == 1) {
+        Dosen *dsn = g_dosenDB[id];
+        if (dsn->getRefs() == 0) {
+            std::cout << "Menghapus dosen ..." << std::endl;
+            delete dsn;
+            g_dosenDB.erase(id);
+        } else {
+            std::cout << "Dosen tersebut masih menjadi rujukan objek lain :(" << std::endl;
+        }
+    } else {
+        std::cout << "Dosen sudah ada sebelumnya :(" << std::endl;
+    }
+}
+
+// KRS
 
 void cbKRSList(void) {
     if (g_user == NULL) {
@@ -657,7 +1068,7 @@ void cbKRSTambahmk(void) {
                 if (makul->cekPrasyarat(g_user, semester)) {
                     bool tumbukan = false;
                     for (
-                        std::list<const Matakuliah *>::iterator it = krs->beginMakul();
+                        std::list<Matakuliah *>::iterator it = krs->beginMakul();
                         it != krs->endMakul();
                         ++it
                     ) {
@@ -740,7 +1151,7 @@ void cbKRSCetak(void) {
         std::cout << " Total matakuliah : " << krs->getTotalMakul() << std::endl;
         std::cout << " Total SKS : " << krs->getTotalSKS() << " / 24" << std::endl;
         for (
-            std::list<const Matakuliah *>::iterator it = krs->beginMakul();
+            std::list<Matakuliah *>::iterator it = krs->beginMakul();
             it != krs->endMakul();
             ++it
         ) {
@@ -772,13 +1183,21 @@ void cbKRSDelete(void) {
     }
 }
 
+// Database
+
 void cbDBReset(void) {
+    if (g_user != NULL) {
+        g_user->decRef();
+    }
     g_user = NULL;
     destroyDB();
     std::cout << "SUKSES! Database ter-reset. Anda akan ter-logout secara otomatis" << std::endl;
 }
 
 void cbDBGenerate(void) {
+    if (g_user != NULL) {
+        g_user->decRef();
+    }
     g_user = NULL;
     destroyDB();
     generateDB();
@@ -792,6 +1211,10 @@ void cbDBSave(void) {
 
     std::ofstream file(namaDB.c_str());
     if (file.is_open()) {
+        if (g_user != NULL) {
+            g_user->decRef();
+        }
+
         unsigned int nMahasiswa = g_mahasiswaDB.size();
         file.write((const char *)&nMahasiswa, sizeof(unsigned int));
         for (
@@ -801,6 +1224,10 @@ void cbDBSave(void) {
         ) {
             strSerialize(file, it->first);
             it->second->serialize(file);
+        }
+
+        if (g_user != NULL) {
+            g_user->incRef();
         }
 
         unsigned int nMatakuliah = g_matakuliahDB.size();
@@ -841,6 +1268,10 @@ void cbDBLoad(void) {
 
     std::ifstream file(namaDB.c_str());
     if (file.is_open()) {
+        if (g_user != NULL) {
+            g_user->decRef();
+        }
+        g_user = NULL;
         destroyDB();
 
         unsigned int nMahasiswa, nMatakuliah, nDosen;
@@ -921,9 +1352,29 @@ void cbDBLoad(void) {
     }
 }
 
+// Login/logout
+
+void cbLogin(void) {
+    std::string nim;
+    std::cout << "Masukkan NIM anda: ";
+    std::cin >> nim;
+    if (g_mahasiswaDB.count(nim) == 1) {
+        if (g_user != NULL) {
+            g_user->decRef();
+        }
+        g_user = g_mahasiswaDB[nim];
+        g_user->incRef();
+        std::cout << "SUKSES! Berhasil login sebagai: " << g_user->getNama() << std::endl;
+    } else {
+        std::cout << "NIM anda tidak ditemukan :(" << std::endl;
+    }
+}
+
 void cbLogout(void) {
     g_running = false;
 }
+
+// Main
 
 int main(void) {
     std::cout << " === SIAKAD CLI v1.0 === " << std::endl;
@@ -932,20 +1383,38 @@ int main(void) {
     std::cout << " done" << std::endl;
 
     g_perintah["help"] = new Operasi("tampilkan daftar perintah", cbHelp);
-    g_perintah["login"] = new Operasi("login sebagai mahasiswa", cbLogin);
-    g_perintah["dosen_list"] = new Operasi("tampilkan daftar dosen", cbDosenList);
+
+    g_perintah["mhs_add"] = new Operasi("tambah mahasiswa", cbMhsAdd);
+    g_perintah["mhs_list"] = new Operasi("tampilkan daftar mahasiswa", cbMhsList);
+    g_perintah["mhs_remove"] = new Operasi("hapus mahasiswa", cbMhsHapus);
+
+    g_perintah["makul_add"] = new Operasi("tambah matakuliah", cbMakulAdd);
     g_perintah["makul_list"] = new Operasi("tampilkan daftar matakuliah", cbMakulList);
     g_perintah["makul_info"] = new Operasi("tampilkan informasi matakuliah", cbMakulInfo);
+    g_perintah["makul_remove"] = new Operasi("hapus matakuliah", cbMakulRemove);
+    g_perintah["makul_setpengampu"] = new Operasi("atur dosen pengampu matakuliah", cbMakulSetpengampu);
+    g_perintah["makul_tambahjdw"] = new Operasi("tambah jadwal pada matakuliah", cbMakulTambahjdw);
+    g_perintah["makul_hapusjdw"] = new Operasi("hapus jadwal dari matakuliah", cbMakulHapusjdw);
+    g_perintah["makul_tambahpra"] = new Operasi("tambah matakuliah prasyarat", cbMakulTambahpra);
+    g_perintah["makul_hapuspra"] = new Operasi("hapus prasyarat matakuliah", cbMakulHapuspra);
+
+    g_perintah["dosen_add"] = new Operasi("tambah dosen", cbDosenAdd);
+    g_perintah["dosen_list"] = new Operasi("tampilkan daftar dosen", cbDosenList);
+    g_perintah["dosen_remove"] = new Operasi("hapus dosen", cbDosenRemove);
+
     g_perintah["krs_list"] = new Operasi("tampilkan daftar KRS", cbKRSList);
     g_perintah["krs_new"] = new Operasi("buat KRS baru", cbKRSNew);
     g_perintah["krs_tambahmk"] = new Operasi("tambah matakuliah ke KRS", cbKRSTambahmk);
     g_perintah["krs_hapusmk"] = new Operasi("hampus matakuliah dari KRS", cbKRSHapusmk);
     g_perintah["krs_cetak"] = new Operasi("cetak KRS", cbKRSCetak);
     g_perintah["krs_delete"] = new Operasi("hapus KRS yang ada", cbKRSDelete);
+
     g_perintah["db_reset"] = new Operasi("reset database", cbDBReset);
     g_perintah["db_generate"] = new Operasi("generate database bawaan", cbDBGenerate);
     g_perintah["db_save"] = new Operasi("simpan ke database", cbDBSave);
     g_perintah["db_load"] = new Operasi("muat dari database", cbDBLoad);
+
+    g_perintah["login"] = new Operasi("login sebagai mahasiswa", cbLogin);
     g_perintah["logout"] = new Operasi("keluar dari program", cbLogout);
 
     std::cout << "Ketik `help` untuk melihat daftar perintah" << std::endl;
@@ -989,10 +1458,14 @@ int main(void) {
 
 // Mahasiswa
 
-Mahasiswa::Mahasiswa(void) {
+Mahasiswa::Mahasiswa(void)
+    : m_refs(0)
+{
 }
 
-Mahasiswa::Mahasiswa(const std::string &id, const std::string &nama) {
+Mahasiswa::Mahasiswa(const std::string &id, const std::string &nama)
+    : m_refs(0)
+{
     m_id = id;
     m_nama = nama;
 }
@@ -1063,6 +1536,8 @@ void Mahasiswa::serialize(std::ostream &output) const {
     std::string classID = getClassID();
     strSerialize(output, classID);
 
+    output.write((const char *)&m_refs, sizeof(unsigned int));
+
     strSerialize(output, m_id);
     strSerialize(output, m_nama);
 
@@ -1083,6 +1558,8 @@ void Mahasiswa::serialize(std::ostream &output) const {
 void Mahasiswa::deserialize(std::istream &input) {
     std::string classID;
     strDeserialize(input, classID);
+
+    input.read((char *)&m_refs, sizeof(unsigned int));
 
     strDeserialize(input, m_id);
     strDeserialize(input, m_nama);
@@ -1108,6 +1585,20 @@ void Mahasiswa::deserialize(std::istream &input) {
     }
 }
 
+void Mahasiswa::incRef(void) {
+    m_refs++;
+}
+
+void Mahasiswa::decRef(void) {
+    if (m_refs > 0) {
+        m_refs--;
+    }
+}
+
+unsigned int Mahasiswa::getRefs(void) const {
+    return m_refs;
+}
+
 
 // KRS
 
@@ -1122,36 +1613,40 @@ const Mahasiswa *KRS::getPemilik(void) const {
     return m_pemilik;
 }
 
-void KRS::addMakul(const Matakuliah *makul) {
+void KRS::addMakul(Matakuliah *makul) {
+    makul->incRef();
+    makul->tambahMahasiswa();
     m_daftarMakul.push_back(makul);
 }
 
-std::list<const Matakuliah *>::iterator KRS::beginMakul(void) {
+std::list<Matakuliah *>::iterator KRS::beginMakul(void) {
     return m_daftarMakul.begin();
 }
 
-std::list<const Matakuliah *>::iterator KRS::endMakul(void) {
+std::list<Matakuliah *>::iterator KRS::endMakul(void) {
     return m_daftarMakul.end();
 }
 
-std::list<const Matakuliah *>::const_iterator KRS::beginMakul(void) const {
+std::list<Matakuliah *>::const_iterator KRS::beginMakul(void) const {
     return m_daftarMakul.begin();
 }
 
-std::list<const Matakuliah *>::const_iterator KRS::endMakul(void) const {
+std::list<Matakuliah *>::const_iterator KRS::endMakul(void) const {
     return m_daftarMakul.end();
 }
 
 void KRS::deleteMakul(const std::string &kodeMK) {
     if (g_matakuliahDB.count(kodeMK) == 1) {
-        std::list<const Matakuliah *>::iterator it = m_daftarMakul.begin();
+        std::list<Matakuliah *>::iterator it = m_daftarMakul.begin();
         while (it != m_daftarMakul.end()) {
-            if ((*it) == g_matakuliahDB[kodeMK]) {
+            if ((*it)->getID() == kodeMK) {
                 break;
             }
             ++it;
         }
         if (it != m_daftarMakul.end()) {
+            (*it)->kurangiMahasiswa();
+            (*it)->decRef();
             m_daftarMakul.erase(it);
         }
     }
@@ -1164,7 +1659,7 @@ int KRS::getTotalMakul(void) const {
 int KRS::getTotalSKS(void) const {
     int total = 0;
     for (
-        std::list<const Matakuliah *>::const_iterator it = m_daftarMakul.begin();
+        std::list<Matakuliah *>::const_iterator it = m_daftarMakul.begin();
         it != m_daftarMakul.end();
         ++it
     ) {
@@ -1184,7 +1679,7 @@ void KRS::serialize(std::ostream &output) const {
     unsigned int nMakul = m_daftarMakul.size();
     output.write((const char *)&nMakul, sizeof(unsigned int));
     for (
-        std::list<const Matakuliah *>::const_iterator it = m_daftarMakul.begin();
+        std::list<Matakuliah *>::const_iterator it = m_daftarMakul.begin();
         it != m_daftarMakul.end();
         ++it
     ) {
@@ -1210,10 +1705,14 @@ void KRS::deserialize(std::istream &input) {
 
 // Matakuliah
 
-Matakuliah::Matakuliah(void) {
+Matakuliah::Matakuliah(void)
+    : m_refs(0), m_pengampu(NULL)
+{
 }
 
-Matakuliah::Matakuliah(const std::string &id, const std::string &nama, int bobot, int kapasitas) {
+Matakuliah::Matakuliah(const std::string &id, const std::string &nama, int bobot, int kapasitas)
+    : m_refs(0), m_pengampu(NULL)
+{
     m_id = id;
     m_nama = nama;
     m_bobot = bobot;
@@ -1261,15 +1760,29 @@ void Matakuliah::kurangiMahasiswa(void) {
     }
 }
 
-void Matakuliah::addPrasyarat(const Matakuliah *prasyarat) {
+void Matakuliah::addPrasyarat(Matakuliah *prasyarat) {
+    prasyarat->incRef();
     m_prasyarat.push_back(prasyarat);
 }
 
-std::list<const Matakuliah *>::const_iterator Matakuliah::beginPrasyarat(void) const {
+void Matakuliah::deletePrasyarat(std::list<Matakuliah *>::iterator prasyaratIt) {
+    (*prasyaratIt)->decRef();
+    m_prasyarat.erase(prasyaratIt);
+}
+
+std::list<Matakuliah *>::iterator Matakuliah::beginPrasyarat(void) {
     return m_prasyarat.begin();
 }
 
-std::list<const Matakuliah *>::const_iterator Matakuliah::endPrasyarat(void) const {
+std::list<Matakuliah *>::iterator Matakuliah::endPrasyarat(void) {
+    return m_prasyarat.end();
+}
+
+std::list<Matakuliah *>::const_iterator Matakuliah::beginPrasyarat(void) const {
+    return m_prasyarat.begin();
+}
+
+std::list<Matakuliah *>::const_iterator Matakuliah::endPrasyarat(void) const {
     return m_prasyarat.end();
 }
 
@@ -1297,18 +1810,24 @@ std::list<Jadwal *>::const_iterator Matakuliah::endJadwal(void) const {
     return m_daftarJadwal.end();
 }
 
-void Matakuliah::setPengampu(const Dosen *pengampu) {
+void Matakuliah::setPengampu(Dosen *pengampu) {
+    if (m_pengampu != NULL) {
+        m_pengampu->decRef();
+    }
+    if (pengampu != NULL) {
+        pengampu->incRef();
+    }
     m_pengampu = pengampu;
 }
 
-const Dosen *Matakuliah::getPengampu(void) const {
+Dosen *Matakuliah::getPengampu(void) const {
     return m_pengampu;
 }
 
 bool Matakuliah::cekPrasyarat(const Mahasiswa *mhs, int semester) const {
     bool terpenuhi = true;
     for (
-        std::list<const Matakuliah *>::const_iterator itMK = m_prasyarat.begin();
+        std::list<Matakuliah *>::const_iterator itMK = m_prasyarat.begin();
         itMK != m_prasyarat.end();
         ++itMK
     ) {
@@ -1320,11 +1839,11 @@ bool Matakuliah::cekPrasyarat(const Mahasiswa *mhs, int semester) const {
         ) {
             if (itKRS->first < semester) {
                 for (
-                    std::list<const Matakuliah *>::const_iterator itAmbil = itKRS->second->beginMakul();
+                    std::list<Matakuliah *>::const_iterator itAmbil = itKRS->second->beginMakul();
                     (itAmbil != itKRS->second->endMakul()) && !sudahAmbil;
                     ++itAmbil
                 ) {
-                    if (*itMK == *itAmbil) {
+                    if ((*itMK)->getID() == (*itAmbil)->getID()) {
                         sudahAmbil = true;
                         break;
                     }
@@ -1361,6 +1880,20 @@ std::string Matakuliah::getClassID(void) const {
     return ClassID_Matakuliah;
 }
 
+void Matakuliah::incRef(void) {
+    m_refs++;
+}
+
+void Matakuliah::decRef(void) {
+    if (m_refs > 0) {
+        m_refs--;
+    }
+}
+
+unsigned int Matakuliah::getRefs(void) const {
+    return m_refs;
+}
+
 
 // MKWajib
 
@@ -1386,6 +1919,8 @@ std::string MKWajib::getClassID(void) const {
 }
 
 void MKWajib::serialize(std::ostream &output) const {
+    output.write((const char *)&m_refs, sizeof(unsigned int));
+
     strSerialize(output, m_id);
     strSerialize(output, m_nama);
     output.write((const char *)&m_bobot, sizeof(int));
@@ -1395,7 +1930,7 @@ void MKWajib::serialize(std::ostream &output) const {
     unsigned int nPrasyarat = m_prasyarat.size();
     output.write((const char *)&nPrasyarat, sizeof(unsigned int));
     for (
-        std::list<const Matakuliah *>::const_iterator it = m_prasyarat.begin();
+        std::list<Matakuliah *>::const_iterator it = m_prasyarat.begin();
         it != m_prasyarat.end();
         ++it
     ) {
@@ -1422,6 +1957,8 @@ void MKWajib::serialize(std::ostream &output) const {
 }
 
 void MKWajib::deserialize(std::istream &input) {
+    input.read((char *)&m_refs, sizeof(unsigned int));
+
     strDeserialize(input, m_id);
     strDeserialize(input, m_nama);
     input.read((char *)&m_bobot, sizeof(int));
@@ -1494,6 +2031,8 @@ std::string MKPilihan::getClassID(void) const {
 }
 
 void MKPilihan::serialize(std::ostream &output) const {
+    output.write((const char *)&m_refs, sizeof(unsigned int));
+
     strSerialize(output, m_id);
     strSerialize(output, m_nama);
     output.write((const char *)&m_bobot, sizeof(int));
@@ -1503,7 +2042,7 @@ void MKPilihan::serialize(std::ostream &output) const {
     unsigned int nPrasyarat = m_prasyarat.size();
     output.write((const char *)&nPrasyarat, sizeof(unsigned int));
     for (
-        std::list<const Matakuliah *>::const_iterator it = m_prasyarat.begin();
+        std::list<Matakuliah *>::const_iterator it = m_prasyarat.begin();
         it != m_prasyarat.end();
         ++it
     ) {
@@ -1530,6 +2069,8 @@ void MKPilihan::serialize(std::ostream &output) const {
 }
 
 void MKPilihan::deserialize(std::istream &input) {
+    input.read((char *)&m_refs, sizeof(unsigned int));
+
     strDeserialize(input, m_id);
     strDeserialize(input, m_nama);
     input.read((char *)&m_bobot, sizeof(int));
@@ -1628,10 +2169,14 @@ void Jadwal::deserialize(std::istream &input) {
 
 // Dosen
 
-Dosen::Dosen(void) {
+Dosen::Dosen(void)
+    : m_refs(0)
+{
 }
 
-Dosen::Dosen(const std::string &id, const std::string &nama) {
+Dosen::Dosen(const std::string &id, const std::string &nama)
+    : m_refs(0)
+{
     m_id = id;
     m_nama = nama;
 }
@@ -1662,5 +2207,19 @@ void Dosen::deserialize(std::istream &input) {
 
     strDeserialize(input, m_id);
     strDeserialize(input, m_nama);
+}
+
+void Dosen::incRef(void) {
+    m_refs++;
+}
+
+void Dosen::decRef(void) {
+    if (m_refs > 0) {
+        m_refs--;
+    }
+}
+
+unsigned int Dosen::getRefs(void) const {
+    return m_refs;
 }
 
