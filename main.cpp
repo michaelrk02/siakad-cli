@@ -21,6 +21,7 @@ Buat program untuk mensimulasikan studi kasus tersebut
 //
 // Hak Cipta (C) 2021, Michael Raditya Krisnadhi
 
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -1162,6 +1163,52 @@ void cbKRSCetak(void) {
     }
 }
 
+void cbKRSJadwal(void) {
+    if (g_user == NULL) {
+        std::cout << "Login terlebih dahulu dengan mengetik `login`" << std::endl;
+        return;
+    }
+
+    std::cout << "JADWAL KRS" << std::endl;
+
+    int semester;
+    std::cout << " Semester : ";
+    std::cin >> semester;
+
+    KRS *krs = g_user->getKRS(semester);
+    if (krs != NULL) {
+        Matakuliah *makul[5][9];
+        memset(makul, 0, sizeof(makul));
+
+        for (
+            std::list<Matakuliah *>::iterator itMK = krs->beginMakul();
+            itMK != krs->endMakul();
+            ++itMK
+        ) {
+            for (
+                std::list<Jadwal *>::iterator itJdw = (*itMK)->beginJadwal();
+                itJdw != (*itMK)->endJadwal();
+                ++itJdw
+            ) {
+                HariID hari = (*itJdw)->getHari();
+                int sesi = (*itJdw)->getSesi();
+                makul[(int)hari][sesi - 1] = (*itMK);
+            }
+        }
+
+        for (int i = 0; i < 5; i++) {
+            std::cout << " Hari " << g_hariStr[(HariID)i] << std::endl;
+            for (int j = 0; j < 9; j++) {
+                if (makul[i][j] != NULL) {
+                    std::cout << "  [Sesi " << (j + 1) << "] " << makul[i][j]->getNama() << std::endl;
+                }
+            }
+        }
+    } else {
+        std::cout << "Anda belum memiliki KRS semester " << semester << " :(" << std::endl;
+    }
+}
+
 void cbKRSDelete(void) {
     if (g_user == NULL) {
         std::cout << "Login terlebih dahulu dengan mengetik `login`" << std::endl;
@@ -1407,6 +1454,7 @@ int main(void) {
     g_perintah["krs_tambahmk"] = new Operasi("tambah matakuliah ke KRS", cbKRSTambahmk);
     g_perintah["krs_hapusmk"] = new Operasi("hampus matakuliah dari KRS", cbKRSHapusmk);
     g_perintah["krs_cetak"] = new Operasi("cetak KRS", cbKRSCetak);
+    g_perintah["krs_jadwal"] = new Operasi("lihat jadwal pada KRS", cbKRSJadwal);
     g_perintah["krs_delete"] = new Operasi("hapus KRS yang ada", cbKRSDelete);
 
     g_perintah["db_reset"] = new Operasi("reset database", cbDBReset);
