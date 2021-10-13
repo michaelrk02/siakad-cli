@@ -391,10 +391,17 @@ void generateMatakuliahDB(void) {
     g_matakuliahDB["IF3280"] = new MKWajib("IF3280", "Sosio-informatika dan Profesionalisme", 3, 5, MKWajibProdi);
     g_matakuliahDB["KU206X"] = new MKWajib("KU206X", "Agama dan Budipekerti", 2, 5, MKWajibUniversitas);
 
+    g_matakuliahDB["IF4020"] = new MKPilihan("IF4020", "Kriptografi", 3, 5, "Ilmu dan Rekayasa Komputasi");
+    g_matakuliahDB["IF4021"] = new MKPilihan("IF4021", "Simulasi dan Pemodelan", 3, 5, "Ilmu dan Rekayasa Komputasi");
+    g_matakuliahDB["IF4030"] = new MKPilihan("IF4030", "Jaringan Komputer Lanjut", 3, 5, "Sistem Terdistribusi");
+    g_matakuliahDB["IF4041"] = new MKPilihan("IF4041", "Teknologi Basis Data", 3, 5, "Rekayasa Perangkat Lunak");
+
     g_matakuliahDB["IF3230"]->addPrasyarat(g_matakuliahDB["IF3130"]);
     g_matakuliahDB["IF3240"]->addPrasyarat(g_matakuliahDB["IF3110"]);
     g_matakuliahDB["IF3240"]->addPrasyarat(g_matakuliahDB["IF3140"]);
     g_matakuliahDB["IF3250"]->addPrasyarat(g_matakuliahDB["IF3150"]);
+    g_matakuliahDB["IF4030"]->addPrasyarat(g_matakuliahDB["IF3130"]);
+    g_matakuliahDB["IF4041"]->addPrasyarat(g_matakuliahDB["IF3140"]);
 }
 
 void generateDosenDB(void) {
@@ -464,6 +471,19 @@ void generateJadwalMatakuliahDB(void) {
     g_matakuliahDB["IF3280"]->addJadwal(new Jadwal(g_matakuliahDB["IF3280"], HariJumat, 3));
     g_matakuliahDB["KU206X"]->addJadwal(new Jadwal(g_matakuliahDB["KU206X"], HariJumat, 5));
     g_matakuliahDB["KU206X"]->addJadwal(new Jadwal(g_matakuliahDB["KU206X"], HariJumat, 6));
+
+    g_matakuliahDB["IF4020"]->addJadwal(new Jadwal(g_matakuliahDB["IF4020"], HariSenin, 3));
+    g_matakuliahDB["IF4020"]->addJadwal(new Jadwal(g_matakuliahDB["IF4020"], HariSenin, 4));
+    g_matakuliahDB["IF4020"]->addJadwal(new Jadwal(g_matakuliahDB["IF4020"], HariSenin, 5));
+    g_matakuliahDB["IF4021"]->addJadwal(new Jadwal(g_matakuliahDB["IF4021"], HariSelasa, 1));
+    g_matakuliahDB["IF4021"]->addJadwal(new Jadwal(g_matakuliahDB["IF4021"], HariSelasa, 2));
+    g_matakuliahDB["IF4021"]->addJadwal(new Jadwal(g_matakuliahDB["IF4021"], HariSelasa, 3));
+    g_matakuliahDB["IF4030"]->addJadwal(new Jadwal(g_matakuliahDB["IF4030"], HariSelasa, 4));
+    g_matakuliahDB["IF4030"]->addJadwal(new Jadwal(g_matakuliahDB["IF4030"], HariSelasa, 5));
+    g_matakuliahDB["IF4030"]->addJadwal(new Jadwal(g_matakuliahDB["IF4030"], HariSelasa, 6));
+    g_matakuliahDB["IF4041"]->addJadwal(new Jadwal(g_matakuliahDB["IF4041"], HariKamis, 6));
+    g_matakuliahDB["IF4041"]->addJadwal(new Jadwal(g_matakuliahDB["IF4041"], HariKamis, 7));
+    g_matakuliahDB["IF4041"]->addJadwal(new Jadwal(g_matakuliahDB["IF4041"], HariKamis, 8));
 }
 
 void generateDB(void) {
@@ -531,6 +551,11 @@ void cbHelp(void) {
     ) {
         std::cout << " " << it->first << " - " << it->second->deskripsi << std::endl;
     }
+    std::cout << "ALUR QUICKSTART" << std::endl;
+    std::cout << " 1. Login sebagai mahasiswa dengan perintah `login` (daftar NIM bisa dilihat dengan `mhs_list`)" << std::endl;
+    std::cout << " 2. Buat KRS baru dengan perintah `krs_new`" << std::endl;
+    std::cout << " 3. Isi KRS dengan matakuliah dengan perintah `krs_tambahmk` (daftar MK bisa dilihat dengan `makul_list`)" << std::endl;
+    std::cout << " 4. Keluar dari program (exit) menggunakan perintah `logout` atau jika ingin login sebagai mahasiswa lain, masukkan perintah `login` lagi tanpa memasukkan `logout`" << std::endl;
 }
 
 // Mahasiswa
@@ -706,7 +731,7 @@ void cbMakulInfo(void) {
             }
             std::cout << std::endl;
         } else if (makul->getClassID() == ClassID_MKPilihan) {
-            std::cout << " PILIHAN (Lab Riset: " << ((MKPilihan *)makul)->getLabRiset() << ")";
+            std::cout << " PILIHAN (Lab Riset: " << ((MKPilihan *)makul)->getLabRiset() << ")" << std::endl;
         }
 
         std::cout << " Bobot : " << makul->getBobot() << " SKS" << std::endl;
